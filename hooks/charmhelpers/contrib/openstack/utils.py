@@ -41,6 +41,7 @@ UBUNTU_OPENSTACK_RELEASE = OrderedDict([
     ('quantal', 'folsom'),
     ('raring', 'grizzly'),
     ('saucy', 'havana'),
+    ('trusty', 'icehouse')
 ])
 
 
@@ -260,6 +261,9 @@ def configure_installation_source(rel):
             'havana': 'precise-updates/havana',
             'havana/updates': 'precise-updates/havana',
             'havana/proposed': 'precise-proposed/havana',
+            'icehouse': 'precise-updates/icehouse',
+            'icehouse/updates': 'precise-updates/icehouse',
+            'icehouse/proposed': 'precise-proposed/icehouse',
         }
 
         try:
@@ -411,7 +415,7 @@ def get_host_ip(hostname):
     return ns_query(hostname)
 
 
-def get_hostname(address):
+def get_hostname(address, fqdn=True):
     """
     Resolves hostname for given IP, or returns the input
     if it is already a hostname.
@@ -430,7 +434,11 @@ def get_hostname(address):
     if not result:
         return None
 
-    # strip trailing .
-    if result.endswith('.'):
-        return result[:-1]
-    return result
+    if fqdn:
+        # strip trailing .
+        if result.endswith('.'):
+            return result[:-1]
+        else:
+            return result
+    else:
+        return result.split('.')[0]

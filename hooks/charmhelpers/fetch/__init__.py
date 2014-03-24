@@ -13,6 +13,7 @@ from charmhelpers.core.hookenv import (
     log,
 )
 import apt_pkg
+import os
 
 CLOUD_ARCHIVE = """# Ubuntu Cloud Archive
 deb http://ubuntu-cloud.archive.canonical.com/ubuntu {} main
@@ -43,8 +44,16 @@ CLOUD_ARCHIVE_POCKETS = {
     'precise-havana/updates': 'precise-updates/havana',
     'precise-updates/havana': 'precise-updates/havana',
     'havana/proposed': 'precise-proposed/havana',
-    'precies-havana/proposed': 'precise-proposed/havana',
+    'precise-havana/proposed': 'precise-proposed/havana',
     'precise-proposed/havana': 'precise-proposed/havana',
+    # Icehouse
+    'icehouse': 'precise-updates/icehouse',
+    'precise-icehouse': 'precise-updates/icehouse',
+    'precise-icehouse/updates': 'precise-updates/icehouse',
+    'precise-updates/icehouse': 'precise-updates/icehouse',
+    'icehouse/proposed': 'precise-proposed/icehouse',
+    'precise-icehouse/proposed': 'precise-proposed/icehouse',
+    'precise-proposed/icehouse': 'precise-proposed/icehouse',
 }
 
 
@@ -66,8 +75,10 @@ def filter_installed_packages(packages):
 
 def apt_install(packages, options=None, fatal=False):
     """Install one or more packages"""
-    options = options or []
-    cmd = ['apt-get', '-y']
+    if options is None:
+        options = ['--option=Dpkg::Options::=--force-confold']
+
+    cmd = ['apt-get', '--assume-yes']
     cmd.extend(options)
     cmd.append('install')
     if isinstance(packages, basestring):
@@ -76,10 +87,14 @@ def apt_install(packages, options=None, fatal=False):
         cmd.extend(packages)
     log("Installing {} with options: {}".format(packages,
                                                 options))
+    env = os.environ.copy()
+    if 'DEBIAN_FRONTEND' not in env:
+        env['DEBIAN_FRONTEND'] = 'noninteractive'
+
     if fatal:
-        subprocess.check_call(cmd)
+        subprocess.check_call(cmd, env=env)
     else:
-        subprocess.call(cmd)
+        subprocess.call(cmd, env=env)
 
 
 def apt_update(fatal=False):
@@ -93,7 +108,7 @@ def apt_update(fatal=False):
 
 def apt_purge(packages, fatal=False):
     """Purge one or more packages"""
-    cmd = ['apt-get', '-y', 'purge']
+    cmd = ['apt-get', '--assume-yes', 'purge']
     if isinstance(packages, basestring):
         cmd.append(packages)
     else:
@@ -121,7 +136,7 @@ def apt_hold(packages, fatal=False):
 
 def add_source(source, key=None):
     if (source.startswith('ppa:') or
-        source.startswith('http:') or
+        source.startswith('http') or
         source.startswith('deb ') or
         source.startswith('cloud-archive:')):
         subprocess.check_call(['add-apt-repository', '--yes', source])
@@ -139,7 +154,9 @@ def add_source(source, key=None):
         with open('/etc/apt/sources.list.d/proposed.list', 'w') as apt:
             apt.write(PROPOSED_POCKET.format(release))
     if key:
-        subprocess.check_call(['apt-key', 'import', key])
+        subprocess.check_call(['apt-key', 'adv', '--keyserver',
+                               'keyserver.ubuntu.com', '--recv',
+                               key])
 
 
 class SourceConfigError(Exception):
