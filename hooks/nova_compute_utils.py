@@ -69,13 +69,7 @@ BASE_RESOURCE_MAP = {
                      context.OSConfigFlagContext(),
                      CloudComputeContext(),
                      NovaComputeLibvirtContext(),
-                     NovaComputeCephContext(),
-                     context.SyslogContext(),
-                     context.SubordinateConfigContext(
-                         interface='nova-ceilometer',
-                         service='nova',
-                         config_file=NOVA_CONF,
-                     )],
+                     NovaComputeCephContext()],
     },
 }
 
@@ -95,9 +89,7 @@ QUANTUM_CONF = '/etc/quantum/quantum.conf'
 QUANTUM_RESOURCES = {
     QUANTUM_CONF: {
         'services': [],
-        'contexts': [context.AMQPContext(),
-                     NeutronComputeContext(),
-                     context.SyslogContext()],
+        'contexts': [context.AMQPContext(), NeutronComputeContext()],
     }
 }
 
@@ -106,9 +98,7 @@ NEUTRON_CONF = '/etc/neutron/neutron.conf'
 NEUTRON_RESOURCES = {
     NEUTRON_CONF: {
         'services': [],
-        'contexts': [context.AMQPContext(),
-                     NeutronComputeContext(),
-                     context.SyslogContext()],
+        'contexts': [context.AMQPContext(), NeutronComputeContext()],
     }
 }
 
@@ -320,18 +310,13 @@ def initialize_ssh_keys(user='root'):
     check_output(['chown', '-R', user, ssh_dir])
 
 
-def import_authorized_keys(user='root', prefix=None):
+def import_authorized_keys(user='root'):
     """Import SSH authorized_keys + known_hosts from a cloud-compute relation
     and store in user's $HOME/.ssh.
     """
-    if prefix:
-        hosts = relation_get('{}_known_hosts'.format(prefix))
-        auth_keys = relation_get('{}_authorized_keys'.format(prefix))
-    else:
-        # XXX: Should this be managed via templates + contexts?
-        hosts = relation_get('known_hosts')
-        auth_keys = relation_get('authorized_keys')
-
+    # XXX: Should this be managed via templates + contexts?
+    hosts = relation_get('known_hosts')
+    auth_keys = relation_get('authorized_keys')
     # XXX: Need to fix charm-helpers to return None for empty settings,
     #      in all cases.
     if not hosts or not auth_keys:
@@ -344,6 +329,25 @@ def import_authorized_keys(user='root', prefix=None):
         _keys.write(b64decode(auth_keys))
     with open(os.path.join(dest, 'known_hosts'), 'wb') as _hosts:
         _hosts.write(b64decode(hosts))
+
+
+def configure_live_migration(configs=None):
+    """
+    Ensure libvirt live migration is properly configured or disabled,
+    depending on current config setting.
+    """
+    # dont think we need this
+    return
+    configs = configs or register_configs()
+    configs.write(LIBVIRTD_CONF)
+    configs.write(LIBVIRT_BIN)
+    configs.write(NOVA_CONF)
+
+    if not migration_enabled():
+        return
+
+    if config('migration-auth-type') == 'ssh':
+        initialize_ssh_keys()
 
 
 def do_openstack_upgrade(configs):
@@ -389,14 +393,4 @@ def create_libvirt_secret(secret_file, secret_uuid, key):
     check_call(cmd)
     cmd = ['virsh', 'secret-set-value', '--secret', secret_uuid,
            '--base64', key]
-    check_call(cmd)
-
-
-def enable_shell(user):
-    cmd = ['usermod', '-s', '/bin/bash', user]
-    check_call(cmd)
-
-
-def disable_shell(user):
-    cmd = ['usermod', '-s', '/bin/false', user]
     check_call(cmd)
